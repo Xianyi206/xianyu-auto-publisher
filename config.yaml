@@ -12,7 +12,7 @@ paths:
   # 处理后图片输出目录
   out_dir: "~\\.hermes\\tmp\\xianyu_publish"
   # 配字字体文件
-  font_path: "~\\.hermes\\fonts\\ZCOOLKuaiLe-Regular.ttf"
+  font_path: "C:/Windows/Fonts/simhei.ttf"
   # 发布日志文件
   log_file: "~\\.hermes\\logs\\xianyu_v21.log"
   # Cookie状态文件
