@@ -73,7 +73,8 @@ input("准备好后按 Enter 开始 → ")
 
 result = subprocess.run(
     [sys.executable, str(PROJECT_DIR / "xianyu_publish_v21.py")],
-    cwd=str(PROJECT_DIR)
+    cwd=str(PROJECT_DIR),
+    stdin=sys.stdin
 )
 
 if result.returncode != 0:
@@ -87,7 +88,8 @@ input("按 Enter 开始验证 → ")
 
 result = subprocess.run(
     [sys.executable, str(PROJECT_DIR / "xianyu_publish_v21.py")],
-    cwd=str(PROJECT_DIR)
+    cwd=str(PROJECT_DIR),
+    stdin=sys.stdin
 )
 
 if result.returncode == 0:

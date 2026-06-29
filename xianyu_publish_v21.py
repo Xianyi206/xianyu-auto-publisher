@@ -11,7 +11,7 @@
   /c/Users/xxx13/AppData/Local/Programs/Python/Python312/python.exe ^
     ~/.hermes/skills/multi-platform-uploader/xianyu-post/scripts/xianyu_publish_v21.py
 """
-import os, time, json, random, yaml
+import os, sys, time, json, random, yaml
 from pathlib import Path
 
 # === 加载配置 ===
@@ -124,46 +124,59 @@ start_time = time.time()
 log(f"🕵️ V21 真人模拟模式 | 目标120-180秒")
 
 with sync_playwright() as p:
-    context = p.chromium.launch_persistent_context(
-        user_data_dir=USER_DATA_DIR,
-        headless=False,
-        viewport={'width': VIEWPORT_W, 'height': VIEWPORT_H},
-        args=['--disable-blink-features=AutomationControlled']
-    )
+    # 启动持久化浏览器（崩溃自动重建 profile）
+    context = None
+    for attempt in range(3):
+        try:
+            context = p.chromium.launch_persistent_context(
+                user_data_dir=USER_DATA_DIR,
+                headless=False,
+                viewport={'width': VIEWPORT_W, 'height': VIEWPORT_H},
+                args=['--disable-blink-features=AutomationControlled']
+            )
+            break
+        except Exception as e:
+            log(f"⚠️ 浏览器启动失败 (尝试{attempt+1}/3): {e}")
+            if os.path.exists(USER_DATA_DIR):
+                import shutil
+                shutil.rmtree(USER_DATA_DIR, ignore_errors=True)
+                log("   已清除损坏的 profile")
+    if context is None:
+        log("❌ 浏览器启动失败，退出")
+        sys.exit(1)
     page = context.new_page()
     cdp = context.new_cdp_session(page)
 
     # ===== 0. 登录检查 =====
+    # 直接在发布页登录（闲鱼首页和发布页是两套独立认证，首页cookie带不过去）
     log("0️⃣ 登录检查...")
-    page.goto("https://www.goofish.com", wait_until="domcontentloaded")
+    page.goto("https://www.goofish.com/publish", wait_until="domcontentloaded")
     human_wait(page, 3000, 5000)
-    body = page.evaluate('document.body.innerText')
-    is_logged_in = '登录' not in body and 'login' not in page.url.lower()
-    if not is_logged_in:
-        log("🔐 需要登录，请在浏览器中扫码...")
-        input("完成后按 Enter 继续...")
-        # 等待登录完成
-        for _ in range(30):  # 最多等60秒
-            page.goto("https://www.goofish.com", wait_until="domcontentloaded")
-            body = page.evaluate('document.body.innerText')
-            if '登录' not in body:
+    has_form = page.query_selector('[contenteditable="true"]') or page.query_selector('input[type="file"]')
+    
+    if not has_form:
+        log("🔐 需要登录。请在浏览器中点击「立即登录」扫码（最多等120秒）...")
+        for _ in range(120):
+            page.wait_for_timeout(1000)
+            has_form = page.query_selector('[contenteditable="true"]') or page.query_selector('input[type="file"]')
+            if has_form:
+                log("✅ 登录成功")
                 break
-            human_wait(page, 1800, 2200)
-        log("✅ 登录成功，状态已保存到持久化目录")
+        else:
+            log("❌ 登录超时")
+            context.close()
+            exit(1)
     else:
         log("✅ 已登录（从持久化上下文恢复）")
 
-    # ===== 1. 导航发布页 =====
-    page.goto("https://www.goofish.com/publish", wait_until="domcontentloaded")
-    human_wait(page, 5000, 10000)  # 页面加载+人确认
-    log("1️⃣ 发布页加载")
-
-    body = page.evaluate('document.body.innerText')
-    if '非法访问' in body:
-        log("❌ 登录验证失败，请删除持久化目录后重试")
+    # 确认在发布页，有表单
+    human_wait(page, 3000, 6000)
+    has_publish_form = page.query_selector('[contenteditable="true"]') or page.query_selector('input[type="file"]')
+    if not has_publish_form:
+        log("❌ 发布表单未加载，请确认已登录")
         context.close()
         exit(1)
-    log(f"   ✅ 已登录")
+    log("1️⃣ 发布表单已就绪")
 
     # 随意晃动鼠标（模拟浏览）
     human_move(page, random.randint(300, 900), random.randint(100, 400))
